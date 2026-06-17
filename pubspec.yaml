@@ -1,7 +1,7 @@
 name: zquiz
 description: A black-and-white mobile memorization and quiz app with AI generation and grading for Chinese, chemistry, and physics.
 publish_to: 'none'
-version: 1.2.1+4
+version: 1.2.2+5
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
