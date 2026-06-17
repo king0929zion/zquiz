@@ -93,7 +93,7 @@ class _AiPageState extends State<AiPage> {
   }
 
   Future<void> _pickTextFile() async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['txt', 'md', 'json', 'csv', 'log'],
       withData: true,
