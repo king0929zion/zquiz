@@ -24,21 +24,35 @@ jobs:
         with:
           flutter-version: '3.x'
 
-      - name: Setup signing
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/keystore.jks
-          cat > android/key.properties <<EOF
-          storeFile=keystore.jks
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          EOF
-
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK
+      - name: Build APK (unsigned)
         run: flutter build apk --release
+
+      - name: Sign APK (v1 + v2/v3)
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/keystore.jks
+          # Step 1: JAR signing (v1 scheme)
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore android/keystore.jks \
+            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+            -keypass "${{ secrets.KEY_PASSWORD }}" \
+            build/app/outputs/flutter-apk/app-release.apk \
+            "${{ secrets.KEY_ALIAS }}"
+          # Step 2: APK Signature Scheme v2+v3
+          APKSIGNER=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}" -name apksigner -type f 2>/dev/null | head -1)
+          if [ -z "$APKSIGNER" ]; then
+            APKSIGNER=$(find / -path "*/build-tools/*/apksigner" -type f 2>/dev/null | head -1)
+          fi
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" sign \
+              --ks android/keystore.jks \
+              --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
+              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+              --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
+              build/app/outputs/flutter-apk/app-release.apk
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
