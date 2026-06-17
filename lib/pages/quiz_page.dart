@@ -1,4 +1,7 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../ai/openai_compatible_client.dart';
 import '../core/normalizer.dart';
@@ -32,6 +35,7 @@ class _QuizPageState extends State<QuizPage> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final Set<String> _selectedOptions = <String>{};
+  final _random = Random();
 
   bool _reviewWrong = false;
   QuizItem? _current;
@@ -73,7 +77,7 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   List<QuizItem> _pool() {
-    final all = widget.data.quizFor(widget.subjectId);
+    final all = widget.data.quizFor(widget.subjectId).toList()..shuffle(_random);
     if (_reviewWrong) {
       return all.where((item) => widget.progress.isWrong(item.id)).toList();
     }
@@ -233,9 +237,7 @@ class _QuizPageState extends State<QuizPage> {
           _selectedOptions.add(value);
         }
       } else {
-        _selectedOptions
-          ..clear()
-          ..add(value);
+        _selectedOptions..clear()..add(value);
       }
       _feedback = '';
     });
@@ -247,10 +249,7 @@ class _QuizPageState extends State<QuizPage> {
     final start = selection.start < 0 ? text.length : selection.start;
     final end = selection.end < 0 ? text.length : selection.end;
     final next = text.replaceRange(start, end, token);
-    _controller.value = TextEditingValue(
-      text: next,
-      selection: TextSelection.collapsed(offset: start + token.length),
-    );
+    _controller.value = TextEditingValue(text: next, selection: TextSelection.collapsed(offset: start + token.length));
     _focusNode.requestFocus();
   }
 
@@ -268,11 +267,7 @@ class _QuizPageState extends State<QuizPage> {
           return EmptyState(
             title: _reviewWrong ? '没有错题' : '这一组已经完成',
             message: _reviewWrong ? '当前范围没有需要重练的题。' : '考过的题会暂时收起，刷新后会重新进入题池。',
-            action: _QuizActions(
-              wrongCount: wrongCount,
-              onReset: _resetCompleted,
-              onWrong: wrongCount == 0 ? null : _reviewWrongOnly,
-            ),
+            action: _QuizActions(wrongCount: wrongCount, onReset: _resetCompleted, onWrong: wrongCount == 0 ? null : _reviewWrongOnly),
           );
         }
         return ListView(
@@ -324,9 +319,23 @@ class _ProgressLine extends StatelessWidget {
       children: [
         Row(
           children: [
+            Icon(LucideIcons.scrollText, size: 24),
+            const SizedBox(width: 8),
             Text(reviewWrong ? '错题重练' : 'Quiz', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const Spacer(),
-            Text('$completed/$total · 错题 $wrong', style: const TextStyle(fontWeight: FontWeight.w800)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(border: Border.all(color: Colors.black), borderRadius: BorderRadius.circular(99)),
+              child: Text('$completed/$total', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+            ),
+            if (wrong > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(99)),
+                child: Text('错 $wrong', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 10),
@@ -395,8 +404,8 @@ class _QuizSurface extends StatelessWidget {
           children: [
             _SmallTag(label: _typeLabel(item.questionType)),
             if (item.kind.trim().isNotEmpty) _SmallTag(label: item.kind),
-            if (item.usesKeywords) const _SmallTag(label: '关键词'),
-            if (item.prefersAi) const _SmallTag(label: 'AI可判'),
+            if (item.usesKeywords) _SmallTag(label: '关键词'),
+            if (item.prefersAi) _SmallTag(label: 'AI可判'),
           ],
         ),
         const SizedBox(height: 14),
@@ -417,19 +426,14 @@ class _QuizSurface extends StatelessWidget {
             minLines: item.prefersAi ? 3 : 1,
             maxLines: item.prefersAi ? 8 : 4,
             textInputAction: item.prefersAi ? TextInputAction.newline : TextInputAction.done,
-            onSubmitted: (_) {
-              if (!item.prefersAi) onSubmit();
-            },
+            onSubmitted: (_) { if (!item.prefersAi) onSubmit(); },
             decoration: InputDecoration(
               hintText: item.prefersAi ? '写出依据、步骤或结论' : '填写答案',
               filled: true,
               fillColor: Colors.white,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(color: Colors.black, width: 1.5),
-              ),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color: Colors.black, width: 1.5)),
             ),
           ),
           if (showChemInput && !answerVisible) ...[
@@ -439,11 +443,31 @@ class _QuizSurface extends StatelessWidget {
         ],
         if (isCorrect != null) ...[
           const SizedBox(height: 16),
-          Text(isCorrect! ? '正确' : '需要回看', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Row(
+            children: [
+              Icon(isCorrect! ? LucideIcons.checkCircle : LucideIcons.alertTriangle, size: 20, color: isCorrect! ? Colors.green : Colors.red),
+              const SizedBox(width: 8),
+              Text(isCorrect! ? '正确' : '需要回看', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, color: isCorrect! ? Colors.green : Colors.red)),
+            ],
+          ),
         ],
         if (feedback.trim().isNotEmpty) ...[
           const SizedBox(height: 10),
-          Text(feedback, style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.55, fontWeight: FontWeight.w700)),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.black.withAlpha(8),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(LucideIcons.info, size: 16),
+                const SizedBox(width: 8),
+                Expanded(child: Text(feedback, style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.55, fontWeight: FontWeight.w700))),
+              ],
+            ),
+          ),
         ],
         if (answerVisible) ...[
           const SizedBox(height: 14),
@@ -453,17 +477,19 @@ class _QuizSurface extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: FilledButton(
+              child: FilledButton.icon(
                 onPressed: submitting ? null : (answerVisible ? onNext : onSubmit),
                 style: FilledButton.styleFrom(backgroundColor: Colors.black, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
-                child: Text(submitting ? '判断中' : (answerVisible ? '下一题' : '提交')),
+                icon: Icon(submitting ? LucideIcons.loader : (answerVisible ? LucideIcons.arrowRight : LucideIcons.send), size: 16),
+                label: Text(submitting ? '判断中' : (answerVisible ? '下一题' : '提交')),
               ),
             ),
             const SizedBox(width: 10),
-            OutlinedButton(
+            OutlinedButton.icon(
               onPressed: submitting ? null : (answerVisible ? onOpenDetail : onDontKnow),
               style: OutlinedButton.styleFrom(foregroundColor: Colors.black, side: const BorderSide(color: Colors.black), padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18)),
-              child: Text(answerVisible ? '讲解' : '不会'),
+              icon: Icon(answerVisible ? LucideIcons.bookmark : LucideIcons.helpCircle, size: 16),
+              label: Text(answerVisible ? '讲解' : '不会'),
             ),
           ],
         ),
@@ -516,7 +542,15 @@ class _ChoiceOptions extends StatelessWidget {
                 border: Border.all(color: Colors.black),
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: Text(option, style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.w800, height: 1.35)),
+              child: Row(
+                children: [
+                  if (isSelected) ...[
+                    Icon(LucideIcons.check, size: 16, color: Colors.white),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(child: Text(option, style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.w800, height: 1.35))),
+                ],
+              ),
             ),
           ),
         );
@@ -559,7 +593,14 @@ class _TrueFalseOptions extends StatelessWidget {
                   border: Border.all(color: Colors.black),
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: Text(value, style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.w900)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(isSelected ? LucideIcons.check : LucideIcons.x, size: 18, color: isSelected ? Colors.white : Colors.black45),
+                    const SizedBox(width: 6),
+                    Text(value, style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.w900)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -648,11 +689,21 @@ class _AnswerPanel extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(border: Border.all(color: Colors.black), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.black),
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.black.withAlpha(4),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('答案', style: TextStyle(fontWeight: FontWeight.w900)),
+          Row(
+            children: [
+              Icon(LucideIcons.checkCircle, size: 16),
+              const SizedBox(width: 6),
+              const Text('答案', style: TextStyle(fontWeight: FontWeight.w900)),
+            ],
+          ),
           const SizedBox(height: 8),
           Text(item.answer, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, height: 1.35)),
           if (item.explain.trim().isNotEmpty) ...[
@@ -672,7 +723,7 @@ class _SmallTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(border: Border.all(color: Colors.black), borderRadius: BorderRadius.circular(99)),
       child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
     );
@@ -691,18 +742,20 @@ class _QuizActions extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton(
+          child: OutlinedButton.icon(
             onPressed: onReset,
             style: OutlinedButton.styleFrom(foregroundColor: Colors.black, side: const BorderSide(color: Colors.black), padding: const EdgeInsets.symmetric(vertical: 13)),
-            child: const Text('刷新全部题目'),
+            icon: const Icon(LucideIcons.refreshCw, size: 16),
+            label: const Text('刷新全部题目'),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: OutlinedButton(
+          child: OutlinedButton.icon(
             onPressed: onWrong,
             style: OutlinedButton.styleFrom(foregroundColor: Colors.black, side: BorderSide(color: onWrong == null ? Colors.black26 : Colors.black), padding: const EdgeInsets.symmetric(vertical: 13)),
-            child: Text('重练错题 $wrongCount'),
+            icon: const Icon(LucideIcons.alertTriangle, size: 16),
+            label: Text('重练错题 $wrongCount'),
           ),
         ),
       ],
@@ -718,7 +771,7 @@ class QuizExplainPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Explain')),
+      appBar: AppBar(title: const Text('讲解')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 36),
         children: [

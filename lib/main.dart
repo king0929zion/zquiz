@@ -1,14 +1,18 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data_repository.dart';
 import 'models.dart';
+import 'ai/openai_compatible_client.dart';
 import 'pages/ai_page.dart';
+import 'pages/dictation_page.dart';
 import 'pages/memorize_page.dart';
 import 'pages/quiz_page.dart';
 import 'study_progress.dart';
 import 'user_content_store.dart';
-import 'widgets/subject_switcher.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,12 +57,7 @@ class ZQuizApp extends StatelessWidget {
           foregroundColor: Colors.black,
           elevation: 0,
           scrolledUnderElevation: 0,
-          titleTextStyle: TextStyle(
-            color: Colors.black,
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.5,
-          ),
+          titleTextStyle: TextStyle(color: Colors.black, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
         ),
         textTheme: const TextTheme(
           headlineSmall: TextStyle(letterSpacing: -0.4),
@@ -104,12 +103,8 @@ class _ZQuizHomeState extends State<ZQuizHome> {
         );
         final page = switch (_tabIndex) {
           0 => MemorizePage(data: data, subjectId: _subjectId),
-          1 => QuizPage(
-              data: data,
-              progress: widget.progress,
-              userContent: widget.userContent,
-              subjectId: _subjectId,
-            ),
+          1 => QuizPage(data: data, progress: widget.progress, userContent: widget.userContent, subjectId: _subjectId),
+          2 => DictationPage(data: data, store: widget.userContent, client: const OpenAICompatibleClient()),
           _ => AiPage(data: data, store: widget.userContent, subjectId: _subjectId),
         };
 
@@ -129,92 +124,191 @@ class _ZQuizHomeState extends State<ZQuizHome> {
               ),
             ],
           ),
-          body: Column(
-            children: [
-              SubjectSwitcher(
-                subjects: data.subjects,
-                value: _subjectId,
-                onChanged: (id) => setState(() => _subjectId = id),
-              ),
-              const SizedBox(height: 6),
-              const Divider(height: 1),
-              Expanded(child: page),
-            ],
+          drawer: _buildDrawer(context, data),
+          body: GestureDetector(
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity != null && details.primaryVelocity! > 200) {
+                Scaffold.of(context).openDrawer();
+              }
+            },
+            child: page,
           ),
-          bottomNavigationBar: SafeArea(
-            minimum: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-            child: Container(
-              height: 62,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.black),
-                borderRadius: BorderRadius.circular(24),
+          bottomNavigationBar: _buildBottomNav(),
+        );
+      },
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context, ZQuizData data) {
+    final subjects = data.subjects.where((s) => s.id != 'all').toList();
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Colors.black12)),
               ),
               child: Row(
                 children: [
-                  _NavButton(
-                    label: '知识库',
-                    selected: _tabIndex == 0,
-                    onTap: () => setState(() => _tabIndex = 0),
-                  ),
-                  _NavButton(
-                    label: 'Quiz',
-                    selected: _tabIndex == 1,
-                    onTap: () => setState(() => _tabIndex = 1),
-                  ),
-                  _NavButton(
-                    label: 'AI',
-                    selected: _tabIndex == 2,
-                    onTap: () => setState(() => _tabIndex = 2),
-                  ),
+                  Icon(LucideIcons.graduationCap, size: 28),
+                  const SizedBox(width: 12),
+                  const Text('ZQuiz', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.bookOpen, size: 16),
+                  const SizedBox(width: 8),
+                  Text('学科', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey[600])),
+                ],
+              ),
+            ),
+            ...subjects.map((subject) => _DrawerSubjectTile(
+                  subject: subject,
+                  selected: _subjectId == subject.id,
+                  onTap: () {
+                    setState(() => _subjectId = subject.id);
+                    Navigator.of(context).pop();
+                  },
+                )),
+            if (_subjectId != 'all')
+              _DrawerSubjectTile(
+                subject: const SubjectInfo(id: 'all', name: '全部'),
+                selected: false,
+                icon: LucideIcons.blocks,
+                onTap: () {
+                  setState(() => _subjectId = 'all');
+                  Navigator.of(context).pop();
+                },
+              ),
+            const Spacer(),
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.black12)),
+              ),
+              child: ListTile(
+                leading: Icon(LucideIcons.settings, size: 20),
+                title: const Text('AI 设置', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                trailing: Icon(LucideIcons.chevronRight, size: 18),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AiPage(data: data, store: widget.userContent, subjectId: _subjectId),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNav() {
+    final items = [
+      (LucideIcons.book, '知识库'),
+      (LucideIcons.scrollText, 'Quiz'),
+      (LucideIcons.penTool, '默写'),
+    ];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            height: 62,
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(230),
+              border: Border.all(color: Colors.black),
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withAlpha(30), blurRadius: 16, offset: const Offset(0, 6)),
+              ],
+            ),
+            child: Row(
+              children: items.asMap().entries.map((entry) {
+                final index = entry.key;
+                final (icon, label) = entry.value;
+                final selected = _tabIndex == index;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _tabIndex = index),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(icon, size: 20, color: selected ? Colors.black : Colors.black45),
+                          const SizedBox(height: 2),
+                          Text(label, style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: selected ? Colors.black : Colors.black45,
+                          )),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   String get _tabTitle {
     if (_tabIndex == 0) return 'Knowledge';
     if (_tabIndex == 1) return 'Quiz';
+    if (_tabIndex == 2) return 'Dictation';
     return 'AI';
   }
 }
 
-class _NavButton extends StatelessWidget {
-  const _NavButton({required this.label, required this.selected, required this.onTap});
-
-  final String label;
+class _DrawerSubjectTile extends StatelessWidget {
+  final SubjectInfo subject;
   final bool selected;
   final VoidCallback onTap;
+  final IconData? icon;
+
+  const _DrawerSubjectTile({
+    required this.subject,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected ? Colors.black : Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: selected ? Colors.white : Colors.black,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ),
-      ),
+    final icons = <String, IconData>{
+      'chinese': LucideIcons.bookOpen,
+      'chemistry': LucideIcons.flaskConical,
+      'physics': LucideIcons.zap,
+    };
+    final effectiveIcon = icon ?? icons[subject.id] ?? LucideIcons.book;
+    return ListTile(
+      dense: true,
+      leading: Icon(effectiveIcon, size: 20, color: selected ? Colors.black : Colors.black54),
+      title: Text(subject.name, style: TextStyle(
+        fontWeight: selected ? FontWeight.w900 : FontWeight.w600,
+        color: selected ? Colors.black : Colors.black87,
+        fontSize: 15,
+      )),
+      trailing: selected ? Icon(LucideIcons.check, size: 16) : null,
+      onTap: onTap,
+      selected: selected,
+      selectedTileColor: Colors.black.withAlpha(12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
 }

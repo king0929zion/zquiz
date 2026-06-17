@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../models.dart';
 import 'detail_page.dart';
@@ -19,9 +20,7 @@ class _MemorizePageState extends State<MemorizePage> {
   @override
   void didUpdateWidget(covariant MemorizePage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.subjectId != widget.subjectId) {
-      _kindFilter = 'all';
-    }
+    if (oldWidget.subjectId != widget.subjectId) _kindFilter = 'all';
   }
 
   @override
@@ -61,9 +60,15 @@ class _MemorizePageState extends State<MemorizePage> {
                         border: Border.all(color: Colors.black),
                         borderRadius: BorderRadius.circular(99),
                       ),
-                      child: Text(
-                        kind.label,
-                        style: TextStyle(color: selected ? Colors.white : Colors.black, fontWeight: FontWeight.w800, fontSize: 13),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (selected) ...[
+                            Icon(LucideIcons.check, size: 12),
+                            const SizedBox(width: 4),
+                          ],
+                          Text(kind.label, style: TextStyle(color: selected ? Colors.white : Colors.black, fontWeight: FontWeight.w800, fontSize: 13)),
+                        ],
                       ),
                     ),
                   );
@@ -81,9 +86,7 @@ class _MemorizePageState extends State<MemorizePage> {
               card: cards[index],
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => DetailPage(data: widget.data, card: cards[index]),
-                  ),
+                  MaterialPageRoute(builder: (_) => DetailPage(data: widget.data, card: cards[index])),
                 );
               },
             ),
@@ -114,6 +117,7 @@ class _MemorizePageState extends State<MemorizePage> {
     const map = {
       'poetryLine': '诗句',
       'article': '古文',
+      'chinese': '语文',
       'chemReaction': '方程式',
       'chemFormula': '化学式',
       'valence': '化合价',
@@ -136,7 +140,13 @@ class _SubjectOverview extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('知识库', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -0.6)),
+        Row(
+          children: [
+            Icon(LucideIcons.book, size: 24),
+            const SizedBox(width: 8),
+            Text('知识库', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -0.6)),
+          ],
+        ),
         const SizedBox(height: 12),
         GridView.count(
           crossAxisCount: 3,
@@ -147,6 +157,7 @@ class _SubjectOverview extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           children: subjects.map((subject) {
             final count = data.cardsFor(subject.id).length;
+            final icons = <String, IconData>{'chinese': LucideIcons.bookOpen, 'chemistry': LucideIcons.flaskConical, 'physics': LucideIcons.zap};
             return Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(border: Border.all(color: Colors.black), borderRadius: BorderRadius.circular(22)),
@@ -154,8 +165,14 @@ class _SubjectOverview extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(subject.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                  Text('$count cards', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700)),
+                  Row(
+                    children: [
+                      Icon(icons[subject.id] ?? LucideIcons.book, size: 16),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text(subject.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
+                    ],
+                  ),
+                  Text('$count 张卡', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700)),
                 ],
               ),
             );
@@ -182,7 +199,7 @@ class _SubjectHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(border: Border.all(color: Colors.black), borderRadius: BorderRadius.circular(99)),
-          child: Text('$count cards', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+          child: Text('$count 张卡', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
         ),
       ],
     );
@@ -198,6 +215,7 @@ class _KnowledgeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final units = card.units.take(3).toList();
+    final isChinese = card.subject == 'chinese';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
@@ -219,21 +237,42 @@ class _KnowledgeCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (card.generatedByAi) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(6)),
+                        child: const Text('AI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     Expanded(
-                      child: Text(card.title.isEmpty ? card.primary : card.title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                      child: Text(
+                        isChinese && card.subtitle.isNotEmpty ? card.subtitle : (card.title.isEmpty ? card.primary : card.title),
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                      ),
                     ),
-                    if (card.generatedByAi)
-                      const Text('AI', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  card.primary,
+                  isChinese && card.subtitle.isNotEmpty
+                      ? card.title
+                      : (card.title == card.primary && card.note.isEmpty ? card.primary : card.primary),
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, height: 1.28, letterSpacing: -0.2),
                 ),
                 if (card.note.trim().isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(card.note, maxLines: 3, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.45)),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(LucideIcons.messageCircle, size: 14, color: Colors.black45),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(card.note, maxLines: 3, overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.45, color: Colors.black54)),
+                      ),
+                    ],
+                  ),
                 ],
                 if (units.isNotEmpty) ...[
                   const SizedBox(height: 12),
