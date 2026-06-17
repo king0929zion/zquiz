@@ -10,3 +10,5 @@ build/
 .vscode/
 *.iml
 .DS_Store
+android/key.properties
+android/keystore.jks
