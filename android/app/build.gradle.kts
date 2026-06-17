@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -5,12 +8,16 @@ plugins {
 }
 
 fun loadKeystoreProperties(): Map<String, String> {
-    val props = java.util.Properties()
+    val props = Properties()
     val file = rootProject.file("key.properties")
     if (file.exists()) {
-        file.inputStream().use { props.load(it) }
+        props.load(FileInputStream(file))
     }
-    return props.map { it.key.toString() to it.value.toString() }.toMap()
+    val result = mutableMapOf<String, String>()
+    for (key in props.stringPropertyNames()) {
+        result[key] = props.getProperty(key)
+    }
+    return result
 }
 
 android {
