@@ -37,12 +37,10 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/app/outputs/flutter-apk/app-release.apk
-          tag_name: v${{ github.run_number }}
-          name: v${{ github.run_number }}
-          body: |
-            zQuiz ${{ github.run_number }} 自动构建
+        run: |
+          gh release create "v${{ github.run_number }}" \
+            build/app/outputs/flutter-apk/app-release.apk \
+            --title "v${{ github.run_number }}" \
+            --notes "zQuiz ${{ github.run_number }} 自动构建"
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
